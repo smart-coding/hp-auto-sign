@@ -12,7 +12,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"github.com/PuerkitoBio/goquery"
 )
 const LOGIN_URL string = "https://hacpai.com/api/v2/login"
 // 登录奖励
@@ -67,19 +66,13 @@ func execCheck() {
 	if err != nil {
 		log.Fatal("签到异常", err)
 	}
-
-	/*dom, err := goquery.NewDocumentFromReader(strings.NewReader(resp));
-	res := dom.Find("div.points.points__item").Eq(0);
-	text := res.Find(".description").Eq(0).Text();
-	score := res.Find(".ft-nowrap").Eq(0).Text();
-	log.Println(text, score)*/
 	log.Println(resp)
 	// 昨日活跃
-	/*resp1, err := hacpaiHttpExec(token, YESTERDAY_REWARD)
+	resp1, err := hacpaiHttpExec(token, YESTERDAY_REWARD)
 	if err != nil {
 		log.Fatal("领取昨日活跃失败", err)
 	}
-	log.Println("昨日活跃奖励：" + resp1)*/
+	log.Println("昨日活跃奖励：" + resp1)
 }
 
 // 执行请求
@@ -97,13 +90,11 @@ func hacpaiHttpExec(token string, url string) (string, error) {
 	resp, err := client.Do(req)
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
-
-	dom, err := goquery.NewDocumentFromReader(resp.Body);
+	/*dom, err := goquery.NewDocumentFromReader(resp.Body);
 	res := dom.Find("div.points.points__item").Eq(0);
 	text := res.Find(".description").Eq(0).Text();
 	score := res.Find(".ft-nowrap").Eq(0).Text();
-	log.Println(text, score)
-
+	log.Println(text, score)*/
 	if err != nil {
 		log.Fatal("get response failed", err)
 		return "", err
