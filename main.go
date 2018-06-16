@@ -12,6 +12,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"github.com/PuerkitoBio/goquery"
+	"strings"
 )
 const LOGIN_URL string = "https://hacpai.com/api/v2/login"
 // 登录奖励
@@ -66,13 +68,29 @@ func execCheck() {
 	if err != nil {
 		log.Fatal("签到异常", err)
 	}
-	log.Println(resp)
+	dom, err := goquery.NewDocumentFromReader(strings.NewReader(resp));
+	if err != nil {
+		log.Fatal("签到信息获取异常", err)
+	}
+	res := dom.Find("div. points .points__item").First();
+	text := res.Find(".description").First().Text();
+	score := res.Find(".ft-nowrap").Last().Text();
+	log.Println("获取结果:", text, score)
+
 	// 昨日活跃
 	resp1, err := hacpaiHttpExec(token, YESTERDAY_REWARD)
 	if err != nil {
 		log.Fatal("领取昨日活跃失败", err)
 	}
-	log.Println("昨日活跃奖励：" + resp1)
+	dom1, err1 := goquery.NewDocumentFromReader(strings.NewReader(resp1));
+	if err1 != nil {
+		log.Fatal("昨日活跃信息获取异常", err)
+	}
+	res = dom1.Find("div .points .points__item").First();
+	text = res.Find(".description").First().Text();
+	score = res.Find(".ft-nowrap").Last().Text();
+	log.Println("获取结果:", text, score)
+
 }
 
 // 执行请求
@@ -90,11 +108,6 @@ func hacpaiHttpExec(token string, url string) (string, error) {
 	resp, err := client.Do(req)
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
-	/*dom, err := goquery.NewDocumentFromReader(resp.Body);
-	res := dom.Find("div.points.points__item").Eq(0);
-	text := res.Find(".description").Eq(0).Text();
-	score := res.Find(".ft-nowrap").Eq(0).Text();
-	log.Println(text, score)*/
 	if err != nil {
 		log.Fatal("get response failed", err)
 		return "", err
