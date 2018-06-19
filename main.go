@@ -59,7 +59,6 @@ func getMd5(str string) string {
 	cipherStr := md5Ctx.Sum(nil)
 	return hex.EncodeToString(cipherStr)
 }
-
 // 执行登录，签到
 func execCheck() {
 	log.Println("开始执行")
@@ -83,7 +82,6 @@ func execCheck() {
 	}
 	log.Println("获取结果:", resp)
 }
-
 // 执行请求
 func hacpaiHttpExec(token string, url string) (string, error) {
 	client := &http.Client{}
@@ -122,7 +120,6 @@ func hacpaiHttpExec(token string, url string) (string, error) {
 	if err2 != nil {
 		log.Fatal("异常", err2);
 	}
-	log.Println("结果：", info)
 	return string(info), err
 }
 
