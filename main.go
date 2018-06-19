@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"github.com/PuerkitoBio/goquery"
+	"strings"
 )
 const LOGIN_URL string = "https://hacpai.com/api/v2/login"
 // 登录奖励
@@ -35,6 +36,13 @@ func main() {
 	execCheck()
 	cronTask()
 }
+// 积分信息结构体
+type SignInfo struct {
+	Total      string   `json:"积分总数"`// 积分总数
+	Action     string   `json:"活动项"`// 操作
+	Change     string   `json:"积分变动"`// 变动
+	Continuous string   `json:"连续签到"`// 连续x天
+}
 // 定时任务
 func cronTask() {
 	spec := os.Getenv("checkCron")
@@ -44,7 +52,6 @@ func cronTask() {
 	c.Start()
 	select {}
 }
-
 // 获取md5
 func getMd5(str string) string {
 	md5Ctx := md5.New()
@@ -67,7 +74,7 @@ func execCheck() {
 	if err != nil {
 		log.Fatal("签到异常", err)
 	}
-	log.Println("获取结果:", resp)
+	log.Println("获取结果:", resp);
 	// 昨日活跃
 	resp, err = hacpaiHttpExec(token, YESTERDAY_REWARD)
 	if err != nil {
@@ -75,7 +82,6 @@ func execCheck() {
 		return
 	}
 	log.Println("获取结果:", resp)
-
 }
 
 // 执行请求
@@ -104,8 +110,20 @@ func hacpaiHttpExec(token string, url string) (string, error) {
 	res := dom.Find("div .points .points__item").First();
 	text := res.Find(".description").First().Text();
 	score := res.Find(".ft-nowrap").Last().Text();
-	log.Println("执行返回:", text, score)
-	return text + ", " + score, err
+	change := res.Find(".sum").First().Text();
+	continuous := strings.TrimSpace(dom.Find("a[href*=daily-checkin]").Text());
+	signInfo := SignInfo{
+		Action: text,
+		Total:score,
+		Change:change,
+		Continuous:continuous,};
+	log.Println("执行返回:", signInfo)
+	info, err2 := json.Marshal(signInfo);
+	if err2 != nil {
+		log.Fatal("异常", err2);
+	}
+	log.Println("结果：", info)
+	return string(info), err
 }
 
 // 登录hacpai
