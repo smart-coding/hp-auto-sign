@@ -20,6 +20,10 @@ const LOGIN_URL string = "https://hacpai.com/api/v2/login"
 const DAILY_CHECKIN = "https://hacpai.com/activity/daily-checkin"
 // 活跃奖励
 const YESTERDAY_REWARD = "https://hacpai.com/activity/yesterday-liveness-reward"
+// 超时时长 30s
+const TimeOut  = 30 * 1000 * 1000 * 1000
+var sign_succ bool
+var user_agent string
 /**
 *入口
  */
@@ -29,10 +33,13 @@ func main() {
 	log.Println("userPasswd:", passwd)
 	os.Setenv("passwd", passwd)
 	log.Println("handle user:" + os.Getenv("userName") + "daily task")
+	user_agent = os.Getenv("ua")
+	log.Println("use user agent:", user_agent)
 	if err != nil {
 		log.Fatal("读取配置文件失败", err)
 		return
 	}
+	sign_succ = false
 	execCheck()
 	cronTask()
 }
@@ -46,11 +53,20 @@ type SignInfo struct {
 // 定时任务
 func cronTask() {
 	spec := os.Getenv("checkCron")
+    spec2 := os.Getenv("checkCron2")
+    spec3 := os.Getenv("dailyRefresh")
 	log.Println("cron task :" + spec + "begin to start!")
 	c := cron.New()
 	c.AddFunc(spec, execCheck)
+    c.AddFunc(spec2, execCheck)
+	c.AddFunc(spec3, dailyFresh)
 	c.Start()
 	select {}
+}
+
+func dailyFresh()  {
+	log.Println("daily fresh sign_succ", sign_succ)
+	sign_succ = false
 }
 // 获取md5
 func getMd5(str string) string {
@@ -62,6 +78,10 @@ func getMd5(str string) string {
 // 执行登录，签到
 func execCheck() {
 	log.Println("开始执行")
+	if sign_succ {
+		log.Println("sign succ already today.")
+		return
+	}
 	token, err := postLogin()
 	if err != nil {
 		log.Fatal("登录失败", err)
@@ -74,6 +94,7 @@ func execCheck() {
 		log.Fatal("签到异常", err)
 	}
 	log.Println("获取结果:", resp);
+	sign_succ = true
 	// 昨日活跃
 	resp, err = hacpaiHttpExec(token, YESTERDAY_REWARD)
 	if err != nil {
@@ -85,13 +106,15 @@ func execCheck() {
 // 执行请求
 func hacpaiHttpExec(token string, url string) (string, error) {
 	client := &http.Client{}
+	client.Timeout = TimeOut;
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		log.Fatal("exectue url"+url+"failed,", err)
 		return "", err
 	}
+
 	req.Header.Set("User-Agent",
-		"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2661.102 Safari/537.36")
+		user_agent)
 	cookie := http.Cookie{Name: "symphony", Value: token, Path: "/", MaxAge: 86400}
 	req.AddCookie(&cookie)
 	resp, err := client.Do(req)
@@ -141,7 +164,9 @@ func postLogin() (string, error) {
 		return "", err
 	}
 	request.Header.Set("Content-Type", "application/json;charset=UTF-8")
+	request.Header.Set("User-Agent", user_agent)
 	client := http.Client{}
+	client.Timeout = TimeOut;
 	resp, err := client.Do(request)
 	if err != nil {
 		log.Println(err.Error())
