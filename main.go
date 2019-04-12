@@ -13,15 +13,12 @@ import (
 	"net/http"
 	"os"
 	"github.com/PuerkitoBio/goquery"
+	"errors"
 	"strings"
 )
 const LOGIN_URL string = "https://hacpai.com/api/v2/login"
-
 const CHECK_GET_URL string = "https://hacpai.com/activity/checkin"
-// 登录奖励
-const DAILY_CHECKIN = "https://hacpai.com/activity/daily-checkin"
-// 活跃奖励
-const YESTERDAY_REWARD = "https://hacpai.com/activity/yesterday-liveness-reward"
+const USER_PAGE string = "https://hacpai.com/member/"
 // 超时时长 30s
 const TimeOut  = 30 * 1000 * 1000 * 1000
 var sign_succ bool
@@ -89,22 +86,79 @@ func execCheck() {
 		log.Println("ERR 登录失败", err)
 		return
 	}
-	log.Println("get token:", token)
+	log.Println("get sym token:", token)
+	url, err := visitCheckPage(token, CHECK_GET_URL)
+	if err != nil {
+		log.Println("获取签到url返回结果：", err)
+		return
+	}
+	log.Print("获取签到url", url)
 	// 签到
-	resp, err := hacpaiHttpExec(token, DAILY_CHECKIN)
+	resp, err := hacpaiHttpExec(token, url)
 	if err != nil {
 		log.Println("ERR 签到异常", err)
 	}
 	log.Println("获取结果:", resp);
 	sign_succ = true
-	// 昨日活跃
-	resp, err = hacpaiHttpExec(token, YESTERDAY_REWARD)
-	if err != nil {
-		log.Println("ERR 领取昨日活跃失败", err)
-		return
-	}
-	log.Println("获取结果:", resp)
 }
+
+/**获取签到url和token
+ */
+func visitCheckPage(token string, url string) (string, error) {
+	client := &http.Client{}
+	client.Timeout = TimeOut;
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		log.Println("ERR exectue url "+url+" failed,", err)
+		return "", err
+	}
+	req.Header.Set("User-Agent", user_agent)
+	req.Header.Set("Referer", "https://hacpai.com/")
+	cookie := http.Cookie{Name: "symphony", Value: token, Path: "/", MaxAge: 86400}
+	req.AddCookie(&cookie)
+	resp, err := client.Do(req)
+	defer resp.Body.Close()
+	if err != nil {
+		log.Println("ERR get response failed", err)
+		return "", err
+	}
+	dom, err := goquery.NewDocumentFromReader(resp.Body);
+	if err != nil {
+		log.Println("ERR 签到信息获取异常", err)
+	}
+	res, exsit := dom.Find("div .module__body .btn ").First().Attr("href");
+	if exsit {
+		has := strings.HasPrefix(res, USER_PAGE)
+		if has {
+			analyseDom(*dom)
+			return res, errors.New("该日已签到")
+		}
+		return res, err
+	} else {
+		return "", errors.New("sign url with token not found")
+	}
+}
+
+/**
+ *解析dom结果
+ */
+func analyseDom(dom goquery.Document) (string) {
+	text := dom.Find("h2 .sub-head .ft-gray").Text();
+	score := dom.Find("div .module__body .btn").First().Text();
+	change := dom.Find("div .module__body .vditor-reset").Text();
+	signInfo := SignInfo{
+		Action:     text,
+		Total:      score,
+		Change:     strings.TrimSpace(change),
+		Continuous: ""};
+	log.Println("执行返回:", signInfo)
+	info, err2 := json.Marshal(signInfo);
+	if err2 != nil {
+		log.Println("ERR 异常", err2);
+	}
+	return string(info)
+}
+
 // 执行请求
 func hacpaiHttpExec(token string, url string) (string, error) {
 	client := &http.Client{}
@@ -114,11 +168,8 @@ func hacpaiHttpExec(token string, url string) (string, error) {
 		log.Println("ERR exectue url "+url+" failed,", err)
 		return "", err
 	}
-	req.Header.Set("User-Agent",
-		user_agent)
-	if url == DAILY_CHECKIN {
-		req.Header.Set("Referer", CHECK_GET_URL)
-	}
+	req.Header.Set("User-Agent", user_agent)
+	req.Header.Set("Referer", CHECK_GET_URL)
 	cookie := http.Cookie{Name: "symphony", Value: token, Path: "/", MaxAge: 86400}
 	req.AddCookie(&cookie)
 	resp, err := client.Do(req)
@@ -127,27 +178,13 @@ func hacpaiHttpExec(token string, url string) (string, error) {
 		log.Println("ERR get response failed", err)
 		return "", err
 	}
-
 	dom, err := goquery.NewDocumentFromReader(resp.Body);
 	if err != nil {
 		log.Println("ERR 签到信息获取异常", err)
+		return "", err
 	}
-	res := dom.Find("div .points .points__item").First();
-	text := res.Find(".description").First().Text();
-	score := res.Find(".ft-nowrap").Last().Text();
-	change := res.Find(".sum").First().Text();
-	continuous := strings.TrimSpace(dom.Find("a[href*=daily-checkin]").Text());
-	signInfo := SignInfo{
-		Action: text,
-		Total:score,
-		Change:change,
-		Continuous:continuous,};
-	log.Println("执行返回:", signInfo)
-	info, err2 := json.Marshal(signInfo);
-	if err2 != nil {
-		log.Println("ERR 异常", err2);
-	}
-	return string(info), err
+	res := analyseDom(*dom)
+	return res, nil
 }
 
 // 登录hacpai
