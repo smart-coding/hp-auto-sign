@@ -16,6 +16,8 @@ import (
 	"strings"
 )
 const LOGIN_URL string = "https://hacpai.com/api/v2/login"
+
+const CHECK_GET_URL string = "https://hacpai.com/activity/checkin"
 // 登录奖励
 const DAILY_CHECKIN = "https://hacpai.com/activity/daily-checkin"
 // 活跃奖励
@@ -84,21 +86,21 @@ func execCheck() {
 	}
 	token, err := postLogin()
 	if err != nil {
-		log.Fatal("登录失败", err)
+		log.Println("ERR 登录失败", err)
 		return
 	}
 	log.Println("get token:", token)
 	// 签到
 	resp, err := hacpaiHttpExec(token, DAILY_CHECKIN)
 	if err != nil {
-		log.Fatal("签到异常", err)
+		log.Println("ERR 签到异常", err)
 	}
 	log.Println("获取结果:", resp);
 	sign_succ = true
 	// 昨日活跃
 	resp, err = hacpaiHttpExec(token, YESTERDAY_REWARD)
 	if err != nil {
-		log.Fatal("领取昨日活跃失败", err)
+		log.Println("ERR 领取昨日活跃失败", err)
 		return
 	}
 	log.Println("获取结果:", resp)
@@ -109,24 +111,26 @@ func hacpaiHttpExec(token string, url string) (string, error) {
 	client.Timeout = TimeOut;
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		log.Fatal("exectue url"+url+"failed,", err)
+		log.Println("ERR exectue url "+url+" failed,", err)
 		return "", err
 	}
-
 	req.Header.Set("User-Agent",
 		user_agent)
+	if url == DAILY_CHECKIN {
+		req.Header.Set("Referer", CHECK_GET_URL)
+	}
 	cookie := http.Cookie{Name: "symphony", Value: token, Path: "/", MaxAge: 86400}
 	req.AddCookie(&cookie)
 	resp, err := client.Do(req)
 	defer resp.Body.Close()
 	if err != nil {
-		log.Fatal("get response failed", err)
+		log.Println("ERR get response failed", err)
 		return "", err
 	}
 
 	dom, err := goquery.NewDocumentFromReader(resp.Body);
 	if err != nil {
-		log.Fatal("签到信息获取异常", err)
+		log.Println("ERR 签到信息获取异常", err)
 	}
 	res := dom.Find("div .points .points__item").First();
 	text := res.Find(".description").First().Text();
@@ -141,7 +145,7 @@ func hacpaiHttpExec(token string, url string) (string, error) {
 	log.Println("执行返回:", signInfo)
 	info, err2 := json.Marshal(signInfo);
 	if err2 != nil {
-		log.Fatal("异常", err2);
+		log.Println("ERR 异常", err2);
 	}
 	return string(info), err
 }
